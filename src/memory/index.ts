@@ -9,12 +9,10 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import express, { Request, Response } from 'express';
+import express from 'express';
 import cors from 'cors';
-import { createServer } from 'http';
-import type { Server as HTTPServer } from 'http';
 
-// Define the path to the JSONL file, you can change this to your desired local path
+// define the path to the JSONL file
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
 const MEMORY_FILE_PATH: string = path.join(__dirname, 'memory.json');
 
@@ -181,64 +179,35 @@ class KnowledgeGraphManager {
   }
 }
 
-const knowledgeGraphManager = new KnowledgeGraphManager();
-
-// server configuration interface
-interface ServerConfig {
-  port: number;
-  host: string;
-}
-
-// server state interface
-interface ServerState {
-  isShuttingDown: boolean;
-  httpServer: HTTPServer | null;
-}
-
 class MemoryServer {
   private readonly knowledgeGraphManager: KnowledgeGraphManager;
-  private readonly config: ServerConfig;
-  private readonly state: ServerState;
   private readonly app: express.Application;
 
-  constructor(config: ServerConfig) {
-    this.config = config;
+  constructor() {
     this.knowledgeGraphManager = new KnowledgeGraphManager();
     this.app = express();
-    this.state = {
-      isShuttingDown: false,
-      httpServer: null
-    };
-
-    // create http server
-    this.state.httpServer = createServer(this.app);
-
+    
     // setup middleware
-    this.setupMiddleware();
-    // setup routes
-    this.setupRoutes();
-    // setup graceful shutdown
-    this.setupGracefulShutdown();
-  }
-
-  private setupMiddleware(): void {
     this.app.use(cors());
     this.app.use(express.json());
+    
+    // setup routes
+    this.setupRoutes();
   }
 
   private setupRoutes(): void {
+    // test endpoint
+    this.app.get('/test', (_req, res) => {
+      res.json({ status: 'ok', message: 'Memory server is running' });
+    });
+
     // health check endpoint
-    this.app.get('/health', (_req: Request, res: Response) => {
-      res.status(200).json({ status: 'healthy' });
+    this.app.get('/health', (_req, res) => {
+      res.json({ status: 'healthy' });
     });
 
     // sse endpoint
-    this.app.get('/sse', async (req: Request, res: Response) => {
-      if (this.state.isShuttingDown) {
-        res.status(503).json({ error: 'Server is shutting down' });
-        return;
-      }
-
+    this.app.get('/sse', async (req, res) => {
       try {
         console.error('SSE connection received');
         res.setHeader('Content-Type', 'text/event-stream');
@@ -261,12 +230,7 @@ class MemoryServer {
     });
 
     // sse message endpoint
-    this.app.post('/message', async (req: Request, res: Response) => {
-      if (this.state.isShuttingDown) {
-        res.status(503).json({ error: 'Server is shutting down' });
-        return;
-      }
-
+    this.app.post('/message', async (req, res) => {
       try {
         console.error('SSE message received');
         const transport = new SSEServerTransport('/message', res);
@@ -276,27 +240,6 @@ class MemoryServer {
         res.status(500).json({ error: 'Internal server error' });
       }
     });
-  }
-
-  private setupGracefulShutdown(): void {
-    const shutdown = async (signal: string): Promise<void> => {
-      console.error(`Received ${signal}. Starting graceful shutdown...`);
-      this.state.isShuttingDown = true;
-
-      // close http server
-      if (this.state.httpServer) {
-        await new Promise<void>((resolve) => {
-          this.state.httpServer?.close(() => resolve());
-        });
-      }
-
-      console.error('Graceful shutdown completed');
-      process.exit(0);
-    };
-
-    // handle shutdown signals
-    process.on('SIGTERM', () => void shutdown('SIGTERM'));
-    process.on('SIGINT', () => void shutdown('SIGINT'));
   }
 
   private createMCPServer(): Server {
@@ -527,37 +470,18 @@ class MemoryServer {
     return server;
   }
 
-  public async start(): Promise<void> {
-    try {
-      await new Promise<void>((resolve) => {
-        this.state.httpServer?.listen(this.config.port, this.config.host, () => {
-          console.error(`Memory MCP Server running on port ${this.config.port}`);
-          console.error(`SSE endpoint: http://${this.config.host}:${this.config.port}/sse`);
-          resolve();
-        });
-      });
-    } catch (error) {
-      console.error('Failed to start server:', error);
-      throw error;
-    }
+  public start(): void {
+    const port = process.env.PORT;
+    this.app.listen(port, () => {
+      console.error(`Memory MCP Server running on port ${port}`);
+    });
   }
 }
 
 // start the server
-async function main(): Promise<void> {
-  const config: ServerConfig = {
-    port: parseInt(process.env.PORT ?? '3000', 10),
-    host: process.env.HOST ?? '0.0.0.0'
-  };
-
-  const server = new MemoryServer(config);
-  
-  try {
-    await server.start();
-  } catch (error) {
-    console.error('Fatal error in main():', error);
-    process.exit(1);
-  }
+function main(): void {
+  const server = new MemoryServer();
+  server.start();
 }
 
-void main();
+main();

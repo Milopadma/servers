@@ -160,16 +160,18 @@ Add this to your claude_desktop_config.json:
 
 ### Endpoints
 
-The server provides a Server-Sent Events (SSE) endpoint:
+The server provides the following endpoints:
 
-- SSE: `http://localhost:3000/sse`
-  - One-way communication (server to client)
-  - Automatic reconnection on connection loss
-  - Works over standard HTTP/HTTPS
-  - Compatible with proxies and firewalls
-  - Native browser support
+1. `/test` - Test endpoint to verify server is running
+   - Returns: `{ status: 'ok', message: 'Memory server is running' }`
 
-The port can be configured using the `PORT` environment variable.
+2. `/health` - Health check endpoint
+   - Returns: `{ status: 'healthy' }`
+
+3. `/sse` - Server-Sent Events endpoint
+   - One-way communication (server to client)
+   - Automatic reconnection on connection loss
+   - Native browser support
 
 ### System Prompt
 
@@ -209,8 +211,14 @@ Docker:
 
 ```sh
 docker build -t mcp/memory -f src/memory/Dockerfile .
-docker run -p 3000:3000 mcp/memory
+docker run mcp/memory
 ```
+
+#### Coolify
+
+1. Create a new service
+2. Use the Dockerfile in this repository
+3. No additional configuration needed - Coolify will handle port mapping
 
 ## License
 
