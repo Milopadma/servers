@@ -197,9 +197,6 @@ class MemoryServer {
 
   private setupRoutes(): void {
     // test endpoint
-    this.app.get('/test', (_req, res) => {
-      res.json({ status: 'ok', message: 'Memory server is running' });
-    });
 
     // health check endpoint
     this.app.get('/health', (_req, res) => {
@@ -207,22 +204,37 @@ class MemoryServer {
     });
 
     // sse endpoint
-    this.app.get('/sse', async (req, res) => {
+    this.app.get('/', (req, res) => {
       try {
         console.error('SSE connection received');
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        
+        // Set SSE headers
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*'
+        });
 
-        const transport = new SSEServerTransport('/message', res);
+        // Send an initial message
+        res.write('data: connected\n\n');
+
+        // Create server and transport
         const server = this.createMCPServer();
-        await server.connect(transport);
+        const transport = new SSEServerTransport('/message', res);
+        
+        // Connect server to transport
+        server.connect(transport).catch(error => {
+          console.error('Error connecting server to transport:', error);
+          res.end();
+        });
 
-        // handle client disconnect
+        // Handle client disconnect
         req.on('close', () => {
+          console.error('Client disconnected');
           void server.close();
         });
+
       } catch (error) {
         console.error('Error in SSE connection:', error);
         res.status(500).end();
@@ -230,13 +242,13 @@ class MemoryServer {
     });
 
     // sse message endpoint
-    this.app.post('/message', async (req, res) => {
+    this.app.post('/message', express.json(), async (req, res) => {
       try {
-        console.error('SSE message received');
+        console.error('Message received:', req.body);
         const transport = new SSEServerTransport('/message', res);
         await transport.handlePostMessage(req, res);
       } catch (error) {
-        console.error('Error handling SSE message:', error);
+        console.error('Error handling message:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });
@@ -471,17 +483,27 @@ class MemoryServer {
   }
 
   public start(): void {
-    const port = process.env.PORT;
-    this.app.listen(port, () => {
+    const port = parseInt(process.env.PORT || '3000', 10);
+    this.app.listen(port, '0.0.0.0', () => {
+      console.error('=================================');
       console.error(`Memory MCP Server running on port ${port}`);
+      console.error(`Test endpoint: http://localhost:${port}`);
+      console.error(`Health endpoint: http://localhost:${port}/health`);
+      console.error(`SSE endpoint: http://localhost:${port}/sse`);
+      console.error('=================================');
     });
   }
 }
 
 // start the server
 function main(): void {
-  const server = new MemoryServer();
-  server.start();
+  try {
+    const server = new MemoryServer();
+    server.start();
+  } catch (error) {
+    console.error('Fatal error starting server:', error);
+    process.exit(1);
+  }
 }
 
 main();
