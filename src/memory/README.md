@@ -137,7 +137,7 @@ Add this to your claude_desktop_config.json:
   "mcpServers": {
     "memory": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "mcp/memory"]
+      "args": ["run", "-i", "-p", "3000:3000", "--rm", "mcp/memory"]
     }
   }
 }
@@ -157,6 +157,19 @@ Add this to your claude_desktop_config.json:
   }
 }
 ```
+
+### Endpoints
+
+The server provides a Server-Sent Events (SSE) endpoint:
+
+- SSE: `http://localhost:3000/sse`
+  - One-way communication (server to client)
+  - Automatic reconnection on connection loss
+  - Works over standard HTTP/HTTPS
+  - Compatible with proxies and firewalls
+  - Native browser support
+
+The port can be configured using the `PORT` environment variable.
 
 ### System Prompt
 
@@ -190,12 +203,13 @@ Follow these steps for each interaction:
      b) Store facts about them as observations
 ```
 
-## Building
+### Building
 
 Docker:
 
 ```sh
-docker build -t mcp/memory -f src/memory/Dockerfile . 
+docker build -t mcp/memory -f src/memory/Dockerfile .
+docker run -p 3000:3000 mcp/memory
 ```
 
 ## License
